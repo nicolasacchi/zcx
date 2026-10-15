@@ -91,7 +91,7 @@ func Run(ctx context.Context, c *client.Client, st *store.Store, o Options) (*Su
 	if err := collect(client.ListConversationsOptions{UpdatedAtSince: updSince}); err != nil {
 		return sum, fmt.Errorf("listing by updated_at: %w", err)
 	}
-	if !(updSince.IsZero() && msgSince.IsZero()) { // a full listing already covers everything
+	if !updSince.IsZero() || !msgSince.IsZero() { // a full listing already covers everything
 		if err := collect(client.ListConversationsOptions{LastMessageAtSince: msgSince}); err != nil {
 			return sum, fmt.Errorf("listing by last_message_at: %w", err)
 		}

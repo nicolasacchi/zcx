@@ -94,27 +94,32 @@ func exportBuild(c client.Conversation, raw, maskOrders bool) exportConversation
 	return out
 }
 
-func exportWriteText(w io.Writer, c exportConversation) {
-	fmt.Fprintf(w, "=== Conversation %d ===\n", c.ID)
-	fmt.Fprintf(w, "created: %s (Europe/Rome)\n", c.CreatedAt)
+// exportWriteText renders one conversation as a text block and writes it in
+// a single call, so a failed write (closed pipe, full disk) is reported.
+func exportWriteText(w io.Writer, c exportConversation) error {
+	var b strings.Builder
+	fmt.Fprintf(&b, "=== Conversation %d ===\n", c.ID)
+	fmt.Fprintf(&b, "created: %s (Europe/Rome)\n", c.CreatedAt)
 	if c.StartPage != "" {
-		fmt.Fprintf(w, "start page: %s\n", c.StartPage)
+		fmt.Fprintf(&b, "start page: %s\n", c.StartPage)
 	}
 	if c.Escalated {
 		line := "escalated: " + c.EscalatedAt
 		if c.EscalationResolved != "" {
 			line += " (resolved " + c.EscalationResolved + ")"
 		}
-		fmt.Fprintln(w, line)
+		b.WriteString(line + "\n")
 	}
 	if c.ShareURL != "" {
-		fmt.Fprintf(w, "url: %s\n", c.ShareURL)
+		fmt.Fprintf(&b, "url: %s\n", c.ShareURL)
 	}
-	fmt.Fprintln(w)
+	b.WriteString("\n")
 	for _, m := range c.Messages {
-		fmt.Fprintf(w, "[%s] %s: %s\n", m.CreatedAt, m.Role, strings.ReplaceAll(m.Text, "\n", "\n    "))
+		fmt.Fprintf(&b, "[%s] %s: %s\n", m.CreatedAt, m.Role, strings.ReplaceAll(m.Text, "\n", "\n    "))
 	}
-	fmt.Fprintln(w)
+	b.WriteString("\n")
+	_, err := io.WriteString(w, b.String())
+	return err
 }
 
 func exportTranscriptsCmd() *cobra.Command {
@@ -155,7 +160,7 @@ func exportTranscriptsCmd() *cobra.Command {
 			if raw {
 				fmt.Fprintln(os.Stderr, "WARNING: --raw disables redaction; the output contains customer PII. Handle accordingly.")
 			}
-			var w io.Writer = cmd.OutOrStdout()
+			w := cmd.OutOrStdout()
 			var fileBuf bytes.Buffer
 			if out != "" {
 				w = &fileBuf // written atomically with mode 0600 at the end
@@ -170,7 +175,9 @@ func exportTranscriptsCmd() *cobra.Command {
 						return err
 					}
 				} else {
-					exportWriteText(bw, ec)
+					if err := exportWriteText(bw, ec); err != nil {
+						return err
+					}
 				}
 			}
 			if err := bw.Flush(); err != nil {

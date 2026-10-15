@@ -25,8 +25,8 @@ func versionCmd() *cobra.Command {
 			if isJSONMode() {
 				return printValue("", map[string]string{"version": version})
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "zcx", version)
-			return nil
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "zcx", version)
+			return err
 		},
 	}
 }

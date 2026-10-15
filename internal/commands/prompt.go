@@ -57,7 +57,9 @@ func promptCmd() *cobra.Command {
 					"sha256":                   store.SHA256(p.MasterPrompt),
 				})
 			}
-			fmt.Fprintln(os.Stdout, p.MasterPrompt)
+			if _, err := fmt.Fprintln(os.Stdout, p.MasterPrompt); err != nil {
+				return err
+			}
 			progressf("length %d/%d characters, sha256 %s", utf8.RuneCountInString(p.MasterPrompt), p.MasterPromptMaxLength, store.SHA256(p.MasterPrompt))
 			return nil
 		},
@@ -104,8 +106,8 @@ func promptCmd() *cobra.Command {
 				return printValue("", map[string]any{"file": outFile, "sha256": sha, "backup": backup,
 					"length": utf8.RuneCountInString(p.MasterPrompt)})
 			}
-			fmt.Fprintf(os.Stdout, "sha256 %s\nfile   %s\nbackup %s\n", sha, outFile, backup)
-			return nil
+			_, err = fmt.Fprintf(os.Stdout, "sha256 %s\nfile   %s\nbackup %s\n", sha, outFile, backup)
+			return err
 		},
 	}
 	pull.Flags().StringP("output", "o", "", "write the prompt to this file (default: stdout)")
@@ -135,8 +137,8 @@ func promptCmd() *cobra.Command {
 				progressf("no differences")
 				return nil
 			}
-			fmt.Fprint(os.Stdout, d)
-			return nil
+			_, err = fmt.Fprint(os.Stdout, d)
+			return err
 		},
 	}
 
@@ -264,18 +266,20 @@ func promptWrite(text, source, baseSHA, action string) error {
 		if isJSONMode() {
 			return printValue("", map[string]any{"ok": true, "changed": false, "sha256": plan.LiveSHA})
 		}
-		fmt.Fprintln(os.Stdout, "no-op: the live prompt is already identical to "+source+"; nothing sent")
-		return nil
+		_, err := fmt.Fprintln(os.Stdout, "no-op: the live prompt is already identical to "+source+"; nothing sent")
+		return err
 	}
 	// 4. show the diff (stderr in JSON mode so stdout stays parseable).
 	var dw io.Writer = os.Stdout
 	if isJSONMode() {
 		dw = os.Stderr
 	}
-	fmt.Fprint(dw, plan.Diff)
+	// The diff must be shown before anything is sent: a failed write aborts the push.
 	newSHA := store.SHA256(plan.New)
-	fmt.Fprintf(dw, "\nlive %s -> new %s (%d/%d characters)\n", plan.LiveSHA[:12], newSHA[:12],
-		utf8.RuneCountInString(plan.New), live.MasterPromptMaxLength)
+	if _, err := fmt.Fprintf(dw, "%s\nlive %s -> new %s (%d/%d characters)\n", plan.Diff, plan.LiveSHA[:12], newSHA[:12],
+		utf8.RuneCountInString(plan.New), live.MasterPromptMaxLength); err != nil {
+		return fmt.Errorf("cannot show the diff, prompt not changed: %w", err)
+	}
 
 	// 5. confirm gate.
 	if handled, err := gateWrite(fmt.Sprintf("replace the live master prompt of chat %s (%s)", e.ChatID, action)); handled {
@@ -322,6 +326,8 @@ func promptWrite(text, source, baseSHA, action string) error {
 		return printValue("", map[string]any{"ok": true, "changed": true, "old_sha256": plan.LiveSHA,
 			"new_sha256": store.SHA256(after.MasterPrompt), "backup": backup, "verified_at": time.Now().UTC()})
 	}
-	fmt.Fprintf(os.Stdout, "ok: prompt updated and verified\nnew sha256 %s\nbackup     %s\n", store.SHA256(after.MasterPrompt), backup)
+	// The write already succeeded and was verified: a closed stdout must not
+	// turn it into a reported failure.
+	_, _ = fmt.Fprintf(os.Stdout, "ok: prompt updated and verified\nnew sha256 %s\nbackup     %s\n", store.SHA256(after.MasterPrompt), backup)
 	return nil
 }

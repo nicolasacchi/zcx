@@ -68,7 +68,9 @@ func TestExportBuild(t *testing.T) {
 		t.Errorf("raw redacted: %s", raw.Messages[0].Text)
 	}
 	var sb strings.Builder
-	exportWriteText(&sb, got)
+	if err := exportWriteText(&sb, got); err != nil {
+		t.Fatal(err)
+	}
 	if !strings.Contains(sb.String(), "CUSTOMER: tel [PHONE]") {
 		t.Error(sb.String())
 	}

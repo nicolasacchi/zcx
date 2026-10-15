@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -111,19 +112,20 @@ func newConversationsCmd() *cobra.Command {
 			if isJSONMode() {
 				return printValue("", conv)
 			}
-			w := cmd.OutOrStdout()
-			fmt.Fprintf(w, "Conversation %d  channel=%s  created=%s (Rome)\n", conv.ID, conv.Channel, timeparse.FormatRome(conv.CreatedAt))
+			var b strings.Builder
+			fmt.Fprintf(&b, "Conversation %d  channel=%s  created=%s (Rome)\n", conv.ID, conv.Channel, timeparse.FormatRome(conv.CreatedAt))
 			if conv.ShareURL != "" {
-				fmt.Fprintf(w, "Share: %s\n", conv.ShareURL)
+				fmt.Fprintf(&b, "Share: %s\n", conv.ShareURL)
 			}
 			for _, m := range conv.Messages {
 				who := m.Role
 				if m.ManualReply {
 					who += " (operator)"
 				}
-				fmt.Fprintf(w, "[%s] %s: %s\n", timeparse.FormatRome(m.CreatedAt), who, strings.TrimSpace(m.Message))
+				fmt.Fprintf(&b, "[%s] %s: %s\n", timeparse.FormatRome(m.CreatedAt), who, strings.TrimSpace(m.Message))
 			}
-			return nil
+			_, err = io.WriteString(cmd.OutOrStdout(), b.String())
+			return err
 		},
 	}
 	c.AddCommand(list, get)

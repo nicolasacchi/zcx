@@ -43,7 +43,7 @@ docs/zipchat-backend-api.md   (local vendor copy, gitignored)
 
 ```sh
 go test -race ./...
-make build && make lint     # lint needs golangci-lint (advisory)
+make build && make lint     # must report 0 issues; golangci-lint must be built with the same Go as the toolchain (if it panics: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest)
 ```
 
 HTTP is tested with `httptest` servers; command e2e tests use `internal/commands/e2e_setup_test.go` (captures requests, resets flags between runs). Synthetic fixtures only.

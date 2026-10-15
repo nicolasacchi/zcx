@@ -25,12 +25,11 @@ type fakeConv struct {
 }
 
 type fake struct {
-	mu       sync.Mutex
-	convs    map[int64]*fakeConv
-	details  map[int64]int
-	listQ    []string
-	fail429  map[int64]bool
-	detailsN int
+	mu      sync.Mutex
+	convs   map[int64]*fakeConv
+	details map[int64]int
+	listQ   []string
+	fail429 map[int64]bool
 }
 
 func (f *fake) handler(w http.ResponseWriter, r *http.Request) {
