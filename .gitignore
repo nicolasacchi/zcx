@@ -1,0 +1,5 @@
+bin/
+dist/
+
+# vendor documentation, local reference only
+docs/zipchat-backend-api.md
