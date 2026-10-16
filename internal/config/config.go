@@ -38,11 +38,14 @@ const (
 // File is the on-disk shape of ~/.config/zcx/config.toml. Every field is
 // optional.
 type File struct {
-	Token   string      `toml:"token,omitempty"`
-	ChatID  any         `toml:"chat_id,omitempty"` // int or string in TOML
-	BaseURL string      `toml:"base_url,omitempty"`
-	Hours   HoursConfig `toml:"hours"`
-	Scope   ScopeConfig `toml:"scope"`
+	Token   string `toml:"token,omitempty"`
+	ChatID  any    `toml:"chat_id,omitempty"` // int or string in TOML
+	BaseURL string `toml:"base_url,omitempty"`
+	// SyncConcurrency is the number of parallel conversation fetches of a sync
+	// (also used by the automatic pre-sync); 0 = default, clamped to 1..8.
+	SyncConcurrency int         `toml:"sync_concurrency,omitempty"`
+	Hours           HoursConfig `toml:"hours"`
+	Scope           ScopeConfig `toml:"scope"`
 }
 
 // ScopeConfig is the default analytics scope for stats and escalations.
@@ -61,18 +64,19 @@ type Options struct {
 
 // Resolved is the fully resolved configuration for one invocation.
 type Resolved struct {
-	Token       string
-	TokenSource string // "flag", "env:ZIPCHAT_API_TOKEN", "file:<path>", "none"
-	ChatID      string // may be empty: the commands layer auto-detects
-	ChatSource  string // "flag", "env:ZCX_CHAT_ID", "file:<path>", "none"
-	BaseURL     string
-	BaseSource  string // "env:ZCX_BASE_URL", "file:<path>", "default"
-	DataDir     string // root data dir ($XDG_DATA_HOME/zcx); per-chat subdirs live below it
-	ConfigPath  string // ~/.config/zcx/config.toml
-	EnvPath     string // ~/.config/zipchat/env
-	Hours       *BusinessHours
-	ScopeHost   string     // [scope] host; empty = every host
-	LiveSince   *time.Time // [scope] live_since; nil = not configured
+	Token           string
+	TokenSource     string // "flag", "env:ZIPCHAT_API_TOKEN", "file:<path>", "none"
+	ChatID          string // may be empty: the commands layer auto-detects
+	ChatSource      string // "flag", "env:ZCX_CHAT_ID", "file:<path>", "none"
+	BaseURL         string
+	BaseSource      string // "env:ZCX_BASE_URL", "file:<path>", "default"
+	DataDir         string // root data dir ($XDG_DATA_HOME/zcx); per-chat subdirs live below it
+	ConfigPath      string // ~/.config/zcx/config.toml
+	EnvPath         string // ~/.config/zipchat/env
+	Hours           *BusinessHours
+	SyncConcurrency int        // sync_concurrency; 0 = default
+	ScopeHost       string     // [scope] host; empty = every host
+	LiveSince       *time.Time // [scope] live_since; nil = not configured
 }
 
 // MaskedToken renders a non-revealing preview of the token ("" when unset).
@@ -253,6 +257,8 @@ func Load(opts Options) (*Resolved, error) {
 		r.BaseURL, r.BaseSource = file.BaseURL, "file:"+r.ConfigPath
 	}
 	r.BaseURL = strings.TrimRight(r.BaseURL, "/")
+
+	r.SyncConcurrency = file.SyncConcurrency
 
 	// Business hours.
 	if r.Hours, err = ParseHours(file.Hours); err != nil {

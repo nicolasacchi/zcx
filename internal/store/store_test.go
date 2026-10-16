@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -131,5 +132,39 @@ func TestInvalidChatID(t *testing.T) {
 		if _, err := OpenAt(t.TempDir(), id); err == nil {
 			t.Errorf("%q accepted", id)
 		}
+	}
+}
+
+func TestConcurrentSaveLoad(t *testing.T) {
+	s, err := OpenAt(t.TempDir(), "7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := int64(1); i <= 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := s.SaveConversation(&client.Conversation{ID: i}); err != nil {
+				t.Error(err)
+				return
+			}
+			if c, err := s.LoadConversation(i); err != nil || c.ID != i {
+				t.Errorf("load %d: %v", i, err)
+			}
+		}()
+	}
+	wg.Wait()
+	ents, _ := os.ReadDir(s.convDir())
+	if len(ents) != 32 {
+		t.Fatalf("%d files (leftover temp files?)", len(ents))
+	}
+	for _, e := range ents {
+		if fi, _ := e.Info(); fi.Mode().Perm() != 0o600 {
+			t.Errorf("%s mode %v", e.Name(), fi.Mode().Perm())
+		}
+	}
+	if fi, _ := os.Stat(s.convDir()); fi.Mode().Perm() != 0o700 {
+		t.Errorf("dir mode %v", fi.Mode().Perm())
 	}
 }

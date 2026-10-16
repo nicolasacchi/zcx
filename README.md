@@ -60,7 +60,7 @@ zcx users list [--show-pii]                      # emails masked unless --show-p
 zcx tools list ; zcx tools get <id>              # custom tools
 zcx variables list                               # names and has_value only, never values
 
-zcx sync [--full]                                # incremental local cache
+zcx sync [--full] [--concurrency N]              # incremental local cache (parallel fetch, default 4, max 8)
 zcx stats --from 2026-10-14 --to 2026-10-16      # KPIs for a date range
 zcx stats --as-of 2026-10-15 --live --offline    # reproducible past snapshot
 zcx escalations --waiting                        # escalated, no operator reply yet
@@ -109,6 +109,8 @@ Notes:
 `zcx sync` stores full conversations (all messages), `state.json` and prompt backups under `<data dir>/<chat id>/` (`conversations/`, `prompts/`). **The cache contains customer PII** (names, emails, phones, free-text messages). Directories are 0700, files 0600, writes are atomic. Do not copy the cache into repositories, tickets or chats; use `export transcripts` (redacted) for sharing.
 
 Sync takes the union of conversations from `updated_at_since` and `last_message_at_since` (5 minute overlap from the stored high-water marks), fetches details only when new or changed, and honors `X-RateLimit-Remaining/Reset`. `--full` ignores the marks.
+
+Details are downloaded by a worker pool: `--concurrency N` (default 4, clamped to 1..8; `sync_concurrency = N` in `~/.config/zcx/config.toml` sets it for `sync` and for the automatic pre-sync of `stats`/`escalations`/`export`; the flag wins). The API allows 120 requests/minute per token; the client reserves a quota slot before every request, so parallel workers never exceed the window, and when only 3 requests are left all workers wait for `X-RateLimit-Reset` (a "rate limit nearly exhausted" line on stderr). A 429 is retried for GET only; `prompt push` (PATCH) is never retried. High-water marks advance only when every conversation was fetched and saved; Ctrl-C stops the workers and leaves the marks untouched. If several fetches fail, the error of the lowest conversation id is reported.
 
 ## Prompt push safety sequence
 

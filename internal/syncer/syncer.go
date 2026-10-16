@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/nicolasacchi/zcx/internal/client"
@@ -16,11 +17,35 @@ import (
 // around the previous sync boundary are re-listed.
 const Overlap = 5 * time.Minute
 
+// Concurrency bounds for the parallel detail fetch.
+const (
+	DefaultConcurrency = 4
+	MaxConcurrency     = 8
+)
+
+// ClampConcurrency maps a requested worker count to the supported range:
+// 0 (unset) is DefaultConcurrency, anything else is clamped to 1..MaxConcurrency.
+func ClampConcurrency(n int) int {
+	switch {
+	case n == 0:
+		return DefaultConcurrency
+	case n < 1:
+		return 1
+	case n > MaxConcurrency:
+		return MaxConcurrency
+	}
+	return n
+}
+
 // Options tunes a sync run.
 type Options struct {
-	Full     bool
-	Progress func(format string, a ...any) // optional
-	Now      func() time.Time              // optional, defaults to time.Now
+	Full bool
+	// Concurrency is the number of conversations fetched in parallel (0 =
+	// DefaultConcurrency, clamped to 1..MaxConcurrency). The client keeps the
+	// whole pool under the API rate limit.
+	Concurrency int
+	Progress    func(format string, a ...any) // optional
+	Now         func() time.Time              // optional, defaults to time.Now
 }
 
 // Summary is the result of a sync run.
@@ -104,12 +129,13 @@ func Run(ctx context.Context, c *client.Client, st *store.Store, o Options) (*Su
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	sum.Listed = len(ids)
 
+	// The marks cover every listed item, whatever the fetch order or outcome;
+	// they are only persisted when every fetch succeeded.
 	maxUpd, maxMsg := ptrVal(state.UpdatedAtHighWater), ptrVal(state.LastMessageAtHighWater)
 	if o.Full {
 		maxUpd, maxMsg = time.Time{}, time.Time{}
 	}
-	var firstErr error
-	for i, id := range ids {
+	for _, id := range ids {
 		item := union[id]
 		if item.UpdatedAt.After(maxUpd) {
 			maxUpd = item.UpdatedAt
@@ -117,10 +143,41 @@ func Run(ctx context.Context, c *client.Client, st *store.Store, o Options) (*Su
 		if item.LastMessageAt != nil && item.LastMessageAt.After(maxMsg) {
 			maxMsg = *item.LastMessageAt
 		}
+	}
+
+	var (
+		mu                      sync.Mutex // guards counters, firstErr and progress output
+		done                    int
+		firstErrID              int64
+		firstErr                error
+		fetched, skipped, nErrs int
+	)
+	finish := func(id int64, outcome int, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch outcome {
+		case outFetched:
+			fetched++
+		case outSkipped:
+			skipped++
+		case outError:
+			nErrs++
+			if firstErr == nil || id < firstErrID {
+				firstErrID, firstErr = id, fmt.Errorf("conversation %d: %w", id, err)
+			}
+			progress("error on conversation %d: %v", id, err)
+		}
+		done++
+		if done%25 == 0 {
+			progress("synced %d/%d (fetched %d, skipped %d, errors %d)", done, len(ids), fetched, skipped, nErrs)
+		}
+	}
+	process := func(id int64) {
+		item := union[id]
 		if !o.Full {
 			if cached, err := st.LoadConversation(id); err == nil && unchanged(cached, &item) {
-				sum.Skipped++
-				continue
+				finish(id, outSkipped, nil)
+				return
 			}
 		}
 		full, err := c.GetConversation(ctx, st.ChatID, id)
@@ -128,17 +185,42 @@ func Run(ctx context.Context, c *client.Client, st *store.Store, o Options) (*Su
 			err = st.SaveConversation(full)
 		}
 		if err != nil {
-			sum.Errors++
-			if firstErr == nil {
-				firstErr = fmt.Errorf("conversation %d: %w", id, err)
+			finish(id, outError, err)
+			return
+		}
+		finish(id, outFetched, nil)
+	}
+
+	work := make(chan int64)
+	var wg sync.WaitGroup
+	for range ClampConcurrency(o.Concurrency) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for id := range work {
+				if ctx.Err() != nil {
+					continue // drain without fetching
+				}
+				process(id)
 			}
-			progress("error on conversation %d: %v", id, err)
-			continue
+		}()
+	}
+feed:
+	for _, id := range ids {
+		select {
+		case work <- id:
+		case <-ctx.Done():
+			break feed
 		}
-		sum.Fetched++
-		if (i+1)%25 == 0 {
-			progress("synced %d/%d (fetched %d, skipped %d, errors %d)", i+1, len(ids), sum.Fetched, sum.Skipped, sum.Errors)
-		}
+	}
+	close(work)
+	wg.Wait()
+
+	mu.Lock()
+	sum.Fetched, sum.Skipped, sum.Errors = fetched, skipped, nErrs
+	mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return sum, fmt.Errorf("sync interrupted, high-water marks not advanced: %w", err)
 	}
 	progress("done: listed %d, fetched %d, skipped %d, errors %d", sum.Listed, sum.Fetched, sum.Skipped, sum.Errors)
 	if firstErr != nil {
@@ -169,6 +251,12 @@ func Run(ctx context.Context, c *client.Client, st *store.Store, o Options) (*Su
 	}
 	return sum, nil
 }
+
+const (
+	outFetched = iota
+	outSkipped
+	outError
+)
 
 func unchanged(cached, item *client.Conversation) bool {
 	if !cached.UpdatedAt.Equal(item.UpdatedAt) {

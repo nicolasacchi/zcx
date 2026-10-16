@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -372,5 +373,136 @@ func TestGet5xxRetried(t *testing.T) {
 	c.sleep = func(context.Context, time.Duration) error { return nil }
 	if _, err := c.GetPrompt(context.Background(), "1"); err != nil || hits.Load() != 3 {
 		t.Fatalf("%v %d", err, hits.Load())
+	}
+}
+
+// windowServer simulates the API quota on a fake clock shared with the client.
+type windowServer struct {
+	mu       sync.Mutex
+	clock    time.Time
+	limit    int
+	count    int
+	resetAt  time.Time
+	maxCount int
+	total    int
+}
+
+func newWindowServer(limit int) *windowServer {
+	start := time.Unix(1_800_000_000, 0)
+	return &windowServer{clock: start, limit: limit, resetAt: start.Add(time.Minute)}
+}
+
+func (w *windowServer) now() time.Time {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.clock
+}
+
+func (w *windowServer) sleep(_ context.Context, d time.Duration) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.clock = w.clock.Add(d) // a window rolls once the clock passes resetAt
+	return nil
+}
+
+func (w *windowServer) handler(rw http.ResponseWriter, _ *http.Request) {
+	w.mu.Lock()
+	if !w.clock.Before(w.resetAt) {
+		w.count, w.resetAt = 0, w.resetAt.Add(time.Minute)
+	}
+	w.count++
+	w.total++
+	w.maxCount = max(w.maxCount, w.count)
+	rem := max(w.limit-w.count, 0)
+	rw.Header().Set("X-RateLimit-Limit", strconv.Itoa(w.limit))
+	rw.Header().Set("X-RateLimit-Remaining", strconv.Itoa(rem))
+	rw.Header().Set("X-RateLimit-Reset", strconv.FormatInt(w.resetAt.Unix(), 10))
+	over := w.count > w.limit
+	w.mu.Unlock()
+	time.Sleep(time.Millisecond)
+	if over {
+		rw.WriteHeader(429)
+		return
+	}
+	writeJSON(rw, 200, map[string]any{"prompt": map[string]any{"master_prompt": "x"}})
+}
+
+func TestParallelGetsStayUnderWindow(t *testing.T) {
+	const limit = 20
+	ws := newWindowServer(limit)
+	srv := httptest.NewServer(http.HandlerFunc(ws.handler))
+	defer srv.Close()
+	c := New(Options{Token: "t", BaseURL: srv.URL})
+	c.now, c.sleep = ws.now, ws.sleep
+	var wg sync.WaitGroup
+	var fails atomic.Int32
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 15 {
+				if _, err := c.GetPrompt(context.Background(), "1"); err != nil {
+					fails.Add(1)
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if fails.Load() != 0 {
+		t.Fatalf("%d failures", fails.Load())
+	}
+	if ws.total != 120 {
+		t.Errorf("total requests %d, want 120 (no 429 retries)", ws.total)
+	}
+	if ws.maxCount > limit-lowWater {
+		t.Fatalf("%d requests in one window, want <= %d", ws.maxCount, limit-lowWater)
+	}
+}
+
+func TestStaleHeaderDoesNotRaiseRemaining(t *testing.T) {
+	c := New(Options{Token: "t", BaseURL: "http://x"})
+	reset := strconv.FormatInt(time.Now().Add(30*time.Second).Unix(), 10)
+	hdr := func(rem string) http.Header {
+		h := http.Header{}
+		h.Set("X-RateLimit-Limit", "120")
+		h.Set("X-RateLimit-Remaining", rem)
+		h.Set("X-RateLimit-Reset", reset)
+		return h
+	}
+	c.mu.Lock()
+	c.applyHeadersLocked(hdr("50"))
+	c.applyHeadersLocked(hdr("60")) // out-of-order older response
+	got := c.rl.Remaining
+	c.mu.Unlock()
+	if got != 50 {
+		t.Fatalf("remaining %d, want 50", got)
+	}
+}
+
+func TestParallel429RetriedForGetNotPatch(t *testing.T) {
+	var gets, patches atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "120")
+		w.Header().Set("X-RateLimit-Remaining", "100")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Second).Unix(), 10))
+		if r.Method == http.MethodPatch {
+			patches.Add(1)
+			w.WriteHeader(429)
+			return
+		}
+		if gets.Add(1) == 1 {
+			w.WriteHeader(429)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"prompt": map[string]any{"master_prompt": "x"}})
+	}))
+	defer srv.Close()
+	c := New(Options{Token: "t", BaseURL: srv.URL})
+	c.sleep = func(context.Context, time.Duration) error { return nil }
+	if _, err := c.GetPrompt(context.Background(), "1"); err != nil || gets.Load() != 2 {
+		t.Fatalf("GET: %v gets=%d", err, gets.Load())
+	}
+	if _, err := c.UpdatePrompt(context.Background(), "1", "x"); err == nil || patches.Load() != 1 {
+		t.Fatalf("PATCH: %v patches=%d", err, patches.Load())
 	}
 }
