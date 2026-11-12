@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/nicolasacchi/zcx/internal/client"
 	"github.com/nicolasacchi/zcx/internal/commands"
@@ -16,8 +17,21 @@ import (
 // version is overwritten at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
+// resolveVersion returns the ldflags-injected version, or, for `go install
+// ...@<tag>` builds where no ldflags are set, the module version recorded in
+// the binary's build info.
+func resolveVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return bi.Main.Version
+	}
+	return version
+}
+
 func main() {
-	commands.SetVersion(version)
+	commands.SetVersion(resolveVersion())
 	err := commands.Execute()
 	if err == nil {
 		return
