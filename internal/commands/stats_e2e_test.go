@@ -19,7 +19,7 @@ func statsSeed(t *testing.T) func(e *Env) error {
 	day := time.Date(2026, 10, 14, 10, 0, 0, 0, rome).UTC()
 	esc := night.Add(time.Minute)
 	dayEsc := day.Add(2 * time.Minute)
-	prod := "https://www.1000farmacie.it/"
+	prod := "https://www.shop.example/"
 	convs := []client.Conversation{
 		{ID: 1, StartLink: &prod, CreatedAt: night, ShareURL: "https://share.example/1", LastEscalatedAt: &esc,
 			Messages: []client.Message{
@@ -48,7 +48,7 @@ func statsSeed(t *testing.T) func(e *Env) error {
 }
 
 func TestStatsE2E(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	old := analyticsRefresh
 	analyticsRefresh = statsSeed(t)
 	defer func() { analyticsRefresh = old }()
@@ -81,7 +81,7 @@ func TestStatsE2E(t *testing.T) {
 }
 
 func TestEscalationsE2E(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	old := analyticsRefresh
 	analyticsRefresh = statsSeed(t)
 	defer func() { analyticsRefresh = old }()
@@ -106,7 +106,7 @@ func TestEscalationsE2E(t *testing.T) {
 }
 
 func TestStatsHostFilterAndLive(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	local := "http://localhost:3000/"
 	prod := "https://www.example-shop.test/"
 	old := analyticsRefresh
@@ -170,7 +170,7 @@ func TestStatsHostFilterAndLive(t *testing.T) {
 }
 
 func TestStatsSurvivesFailedPreSync(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	old := analyticsRefresh
 	defer func() { analyticsRefresh = old }()
 	seed := statsSeed(t)
@@ -191,7 +191,7 @@ func TestStatsSurvivesFailedPreSync(t *testing.T) {
 }
 
 func TestStatsBareAsOfIsEndOfDay(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	old := analyticsRefresh
 	analyticsRefresh = statsSeed(t)
 	defer func() { analyticsRefresh = old }()

@@ -12,13 +12,13 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const exportConvJSON = `{"id":1,"chat_id":21356,"created_at":"2026-10-14T09:00:00Z","updated_at":"2026-10-14T10:00:00Z","last_message_at":"2026-10-14T10:00:00Z","last_escalated_at":"2026-10-14T10:00:00Z","start_link":"https://example.test/p/1","share_url":"https://example.test/s/1","messages_pagination":{"page":1,"per_page":200,"total_count":3,"total_pages":1,"has_next_page":false},"messages":[
+const exportConvJSON = `{"id":1,"chat_id":40404,"created_at":"2026-10-14T09:00:00Z","updated_at":"2026-10-14T10:00:00Z","last_message_at":"2026-10-14T10:00:00Z","last_escalated_at":"2026-10-14T10:00:00Z","start_link":"https://example.test/p/1","share_url":"https://example.test/s/1","messages_pagination":{"page":1,"per_page":200,"total_count":3,"total_pages":1,"has_next_page":false},"messages":[
 {"id":1,"role":"user","message":"mail a test@example.com ordine F123456789","created_at":"2026-10-14T09:00:00Z"},
 {"id":2,"role":"assistant","message":"<p>Ciao</p>","created_at":"2026-10-14T09:00:05Z"},
 {"id":3,"role":"assistant","manual_reply":true,"message":"Salve","created_at":"2026-10-14T10:00:00Z"}]}`
 
 func TestExportTranscripts(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	h := func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/conversations"):
@@ -87,7 +87,7 @@ func TestExportStartLinkRedactedAndOutFileMode(t *testing.T) {
 		t.Errorf("raw start page %q", got)
 	}
 
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	h := func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/conversations"):

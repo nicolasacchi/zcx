@@ -18,7 +18,7 @@ func readHandler(t *testing.T) http.HandlerFunc {
 		enc := json.NewEncoder(w)
 		switch {
 		case r.URL.Path == "/api/v1/chats":
-			chatsHandler(21356)(w, r)
+			chatsHandler(40404)(w, r)
 		case strings.HasSuffix(r.URL.Path, "/conversations"):
 			page := r.URL.Query().Get("page")
 			next := page == "" || page == "1"
@@ -39,7 +39,7 @@ func readHandler(t *testing.T) http.HandlerFunc {
 		case strings.HasSuffix(r.URL.Path, "/variables"):
 			_ = enc.Encode(map[string]any{"variables": []map[string]any{{"id": 1, "name": "API_KEY", "has_value": true}}, "pagination": map[string]any{"page": 1}})
 		case strings.HasSuffix(r.URL.Path, "/prompt"):
-			_ = enc.Encode(map[string]any{"prompt": map[string]any{"chat_id": 21356, "master_prompt": "0123456789", "master_prompt_max_length": 100}})
+			_ = enc.Encode(map[string]any{"prompt": map[string]any{"chat_id": 40404, "master_prompt": "0123456789", "master_prompt_max_length": 100}})
 		default:
 			http.NotFound(w, r)
 		}
@@ -47,7 +47,7 @@ func readHandler(t *testing.T) http.HandlerFunc {
 }
 
 func TestConversationsListAll(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	cap, out, _, err := runZcx(t, readHandler(t), "conversations", "list", "--all", "--since", "2026-10-01")
 	if err != nil {
 		t.Fatal(err)
@@ -61,7 +61,7 @@ func TestConversationsListAll(t *testing.T) {
 }
 
 func TestConversationsGet(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, out, _, err := runZcx(t, readHandler(t), "conversations", "get", "7", "--json")
 	if err != nil || gjson.Get(out, "messages.0.message").String() != "hello" {
 		t.Fatalf("%v %s", err, out)
@@ -69,7 +69,7 @@ func TestConversationsGet(t *testing.T) {
 }
 
 func TestUsersMasked(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, out, _, err := runZcx(t, readHandler(t), "users", "list", "--json")
 	if err != nil || gjson.Get(out, "0.email").String() != "j***@example.com" {
 		t.Fatalf("%v %s", err, out)
@@ -81,7 +81,7 @@ func TestUsersMasked(t *testing.T) {
 }
 
 func TestToolsAndVariables(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, out, _, err := runZcx(t, readHandler(t), "tools", "list", "--json")
 	if err != nil || gjson.Get(out, "#").Int() != 2 {
 		t.Fatalf("%v %s", err, out)
@@ -97,7 +97,7 @@ func TestToolsAndVariables(t *testing.T) {
 }
 
 func TestAuditWithoutAndWithCache(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, out, _, err := runZcx(t, readHandler(t), "audit", "--json")
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestAuditWithoutAndWithCache(t *testing.T) {
 	rate := "up"
 	seed := func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/prompt") {
-			s, err := store.OpenAt(os.Getenv("XDG_DATA_HOME")+"/zcx", "21356")
+			s, err := store.OpenAt(os.Getenv("XDG_DATA_HOME")+"/zcx", "40404")
 			if err != nil {
 				t.Error(err)
 			} else {

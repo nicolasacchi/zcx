@@ -13,7 +13,7 @@ import (
 
 func open(t *testing.T) *Store {
 	t.Helper()
-	s, err := OpenAt(filepath.Join(t.TempDir(), "zcx"), "21356")
+	s, err := OpenAt(filepath.Join(t.TempDir(), "zcx"), "40404")
 	if err != nil {
 		t.Fatal(err)
 	}

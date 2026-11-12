@@ -190,12 +190,12 @@ func TestEnvFileQuotedValueWithTrailingComment(t *testing.T) {
 func TestSourcesAreTrimmed(t *testing.T) {
 	isolate(t)
 	t.Setenv(EnvToken, "zcu-env\n")
-	t.Setenv(EnvChatID, " 21356 ")
+	t.Setenv(EnvChatID, " 40404 ")
 	r, err := Load(Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if r.Token != "zcu-env" || r.ChatID != "21356" {
+	if r.Token != "zcu-env" || r.ChatID != "40404" {
 		t.Fatalf("%q %q", r.Token, r.ChatID)
 	}
 	r, _ = Load(Options{TokenFlag: " zc-flag\n", ChatFlag: "5 "})

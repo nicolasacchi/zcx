@@ -14,7 +14,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// fakePrompt is a stateful fake of GET/PATCH /chats/21356/prompt.
+// fakePrompt is a stateful fake of GET/PATCH /chats/40404/prompt.
 type fakePrompt struct {
 	text     string
 	max      int
@@ -25,14 +25,14 @@ type fakePrompt struct {
 }
 
 func (f *fakePrompt) handler(w http.ResponseWriter, r *http.Request) {
-	if !strings.HasSuffix(r.URL.Path, "/chats/21356/prompt") {
+	if !strings.HasSuffix(r.URL.Path, "/chats/40404/prompt") {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	switch r.Method {
 	case http.MethodGet:
-		_ = json.NewEncoder(w).Encode(map[string]any{"prompt": map[string]any{"chat_id": 21356, "master_prompt": f.text, "master_prompt_max_length": f.max}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"prompt": map[string]any{"chat_id": 40404, "master_prompt": f.text, "master_prompt_max_length": f.max}})
 	case http.MethodPatch:
 		var b struct {
 			MasterPrompt string `json:"master_prompt"`
@@ -52,7 +52,7 @@ func (f *fakePrompt) handler(w http.ResponseWriter, r *http.Request) {
 		if !f.ignore {
 			f.text = strings.TrimSpace(b.MasterPrompt)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"prompt": map[string]any{"chat_id": 21356, "master_prompt": f.text, "master_prompt_max_length": f.max}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"prompt": map[string]any{"chat_id": 40404, "master_prompt": f.text, "master_prompt_max_length": f.max}})
 	}
 }
 
@@ -94,7 +94,7 @@ const livePrompt = "You are a helpful synthetic assistant.\nBe brief."
 var liveSHA = store.SHA256(livePrompt)
 
 func TestPromptPushHappyPath(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000}
 	file := writeTemp(t, "\n"+livePrompt+"\nAlways greet.\n\n")
 	cap, out, _, err := runZcx(t, f.handler, "prompt", "push", file, "--base-sha", liveSHA, "--yes")
@@ -108,7 +108,7 @@ func TestPromptPushHappyPath(t *testing.T) {
 		t.Fatalf("PATCH body not trimmed: %q", f.patchLog[0])
 	}
 	// order: GET before PATCH, GET again after.
-	want := []string{"GET /api/v1/chats/21356/prompt", "PATCH /api/v1/chats/21356/prompt", "GET /api/v1/chats/21356/prompt"}
+	want := []string{"GET /api/v1/chats/40404/prompt", "PATCH /api/v1/chats/40404/prompt", "GET /api/v1/chats/40404/prompt"}
 	got := cap.Paths()
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("sequence %v", got)
@@ -117,7 +117,7 @@ func TestPromptPushHappyPath(t *testing.T) {
 		t.Fatal("auth")
 	}
 	// backup of the OLD prompt exists in the store.
-	dir := filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "21356", "prompts")
+	dir := filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "40404", "prompts")
 	ents, _ := os.ReadDir(dir)
 	if len(ents) != 1 {
 		t.Fatalf("backups: %d", len(ents))
@@ -129,7 +129,7 @@ func TestPromptPushHappyPath(t *testing.T) {
 }
 
 func TestPromptPushRefusalsSendNoPatch(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	cases := []struct {
 		name    string
 		file    string
@@ -168,7 +168,7 @@ func TestPromptPushRefusalsSendNoPatch(t *testing.T) {
 }
 
 func TestPromptPushIdenticalIsNoop(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000}
 	cap, out, _, err := runZcx(t, f.handler, "prompt", "push", writeTemp(t, livePrompt+"\n"), "--base-sha", liveSHA, "--yes")
 	if err != nil {
@@ -180,7 +180,7 @@ func TestPromptPushIdenticalIsNoop(t *testing.T) {
 }
 
 func TestPromptPushDryRun(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000}
 	cap, out, errOut, err := runZcx(t, f.handler, "prompt", "push", writeTemp(t, livePrompt+"\nmore"), "--base-sha", liveSHA, "--dry-run")
 	if err != nil {
@@ -193,8 +193,8 @@ func TestPromptPushDryRun(t *testing.T) {
 		t.Fatalf("out %q", out)
 	}
 	// no backup written either.
-	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "21356", "prompts")); err == nil {
-		ents, _ := os.ReadDir(filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "21356", "prompts"))
+	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "40404", "prompts")); err == nil {
+		ents, _ := os.ReadDir(filepath.Join(os.Getenv("XDG_DATA_HOME"), "zcx", "40404", "prompts"))
 		if len(ents) != 0 {
 			t.Fatal("backup written during dry-run")
 		}
@@ -202,7 +202,7 @@ func TestPromptPushDryRun(t *testing.T) {
 }
 
 func TestPromptPushServerRejections(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	for status, code := range map[int]int{403: 2, 422: 3} {
 		f := &fakePrompt{text: livePrompt, max: 1000, patchTo: status}
 		cap, _, stderr, err := runZcx(t, f.handler, "prompt", "push", writeTemp(t, livePrompt+"\nmore"), "--base-sha", liveSHA, "--yes")
@@ -223,7 +223,7 @@ func TestPromptPushServerRejections(t *testing.T) {
 }
 
 func TestPromptPushNetworkErrorNeverRetried(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000, drop: true}
 	cap, _, _, err := runZcx(t, f.handler, "prompt", "push", writeTemp(t, livePrompt+"\nmore"), "--base-sha", liveSHA, "--yes")
 	if err == nil {
@@ -244,7 +244,7 @@ func TestPromptPushNetworkErrorNeverRetried(t *testing.T) {
 }
 
 func TestPromptPushVerificationFailure(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000, ignore: true}
 	cap, _, _, err := runZcx(t, f.handler, "prompt", "push", writeTemp(t, livePrompt+"\nmore"), "--base-sha", liveSHA, "--yes")
 	if err == nil || !strings.Contains(err.Error(), "VERIFICATION FAILED") || !strings.Contains(err.Error(), "backup") {
@@ -256,7 +256,7 @@ func TestPromptPushVerificationFailure(t *testing.T) {
 }
 
 func TestPromptPullDiffHistoryRestore(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: livePrompt, max: 1000}
 	out := filepath.Join(t.TempDir(), "pulled.txt")
 	if err := os.WriteFile(out, []byte("old"), 0o644); err != nil {
@@ -281,7 +281,7 @@ func TestPromptPullDiffHistoryRestore(t *testing.T) {
 		t.Fatalf("diff: %v %q", err, stdout)
 	}
 	// history sees the backup from pull (same XDG per runZcx call, so redo in one dir).
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, stdout, _, err = runZcx(t, f.handler, "prompt", "history", "--json")
 	if err != nil || !gjson.Valid(stdout) {
 		t.Fatalf("history: %v %q", err, stdout)
@@ -289,7 +289,7 @@ func TestPromptPullDiffHistoryRestore(t *testing.T) {
 }
 
 func TestPromptRestore(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	f := &fakePrompt{text: "current live text", max: 1000}
 	// runZcx isolates XDG_DATA_HOME per run, so an existing backup is not
 	// reachable: restoring an unknown backup must fail with not_found and send nothing.

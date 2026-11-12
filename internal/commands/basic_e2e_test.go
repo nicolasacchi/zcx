@@ -33,7 +33,7 @@ func TestVersion(t *testing.T) {
 }
 
 func TestChatsList(t *testing.T) {
-	cap, out, _, err := runZcx(t, chatsHandler(21356), "chats", "list")
+	cap, out, _, err := runZcx(t, chatsHandler(40404), "chats", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestChatsList(t *testing.T) {
 	if cap.Requests[0].Auth != "Bearer zcu-test-token" {
 		t.Errorf("auth %q", cap.Requests[0].Auth)
 	}
-	if gjson.Get(out, "0.id").Int() != 21356 || gjson.Get(out, "0.domain").String() != "shop.example" {
+	if gjson.Get(out, "0.id").Int() != 40404 || gjson.Get(out, "0.domain").String() != "shop.example" {
 		t.Errorf("out %s", out)
 	}
 }
@@ -82,17 +82,17 @@ func TestGetEnvMissingTokenAndOffline(t *testing.T) {
 		t.Fatal("offline without any chat id or cache must fail")
 	}
 	dd := os.Getenv("XDG_DATA_HOME")
-	if err := os.MkdirAll(filepath.Join(dd, "zcx", "21356"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dd, "zcx", "40404"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	e, err := getEnv(true, true)
-	if err != nil || e.ChatID != "21356" || e.Client != nil {
+	if err != nil || e.ChatID != "40404" || e.Client != nil {
 		t.Fatalf("%v %+v", err, e)
 	}
 }
 
 func TestConfigShowMasksToken(t *testing.T) {
-	t.Setenv("ZCX_CHAT_ID", "21356")
+	t.Setenv("ZCX_CHAT_ID", "40404")
 	_, out, _, err := runZcx(t, nil, "config", "show")
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +100,7 @@ func TestConfigShowMasksToken(t *testing.T) {
 	if strings.Contains(out, "zcu-test-token") {
 		t.Fatal("token leaked in config show")
 	}
-	if gjson.Get(out, "token_source").String() != "env:ZIPCHAT_API_TOKEN" || gjson.Get(out, "chat_id").String() != "21356" {
+	if gjson.Get(out, "token_source").String() != "env:ZIPCHAT_API_TOKEN" || gjson.Get(out, "chat_id").String() != "40404" {
 		t.Errorf("%s", out)
 	}
 	if gjson.Get(out, "hours.timezone").String() != "Europe/Rome" || gjson.Get(out, "hours.schedule.mon.0").String() != "09:00-19:00" {
@@ -109,14 +109,14 @@ func TestConfigShowMasksToken(t *testing.T) {
 }
 
 func TestDoctorOKAutoDetectsChat(t *testing.T) {
-	cap, out, _, err := runZcx(t, chatsHandler(21356), "config", "doctor")
+	cap, out, _, err := runZcx(t, chatsHandler(40404), "config", "doctor")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	if len(cap.Requests) != 1 {
 		t.Errorf("doctor should make exactly one request, got %v", cap.Paths())
 	}
-	if !gjson.Get(out, "ok").Bool() || gjson.Get(out, "chat.id").String() != "21356" ||
+	if !gjson.Get(out, "ok").Bool() || gjson.Get(out, "chat.id").String() != "40404" ||
 		gjson.Get(out, "chat.source").String() != "auto-detected" ||
 		gjson.Get(out, "rate_limit.remaining").Int() != 119 || !gjson.Get(out, "rate_limit.headers_seen").Bool() {
 		t.Errorf("%s", out)
